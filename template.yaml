@@ -1,14 +1,14 @@
 apiVersion: operator.kyma-project.io/v1alpha1
 kind: ModuleTemplate
 metadata:
-  name: moduletemplate-template
+  name: moduletemplate-template-operator
   namespace: kcp-system
   labels:
     "operator.kyma-project.io/managed-by": "lifecycle-manager"
     "operator.kyma-project.io/controller-name": "manifest"
-    "operator.kyma-project.io/module-name": "template"
+    "operator.kyma-project.io/module-name": "template-operator"
   annotations:
-    "operator.kyma-project.io/module-version": "0.0.4"
+    "operator.kyma-project.io/module-version": "0.0.5"
     "operator.kyma-project.io/module-provider": "internal"
     "operator.kyma-project.io/descriptor-schema-version": "v2"
 spec:
@@ -20,32 +20,40 @@ spec:
     metadata:
       name: sample-sample
     spec:
-      releaseName: "redis-release"
+      resourceFilePath: "redis-release"
   descriptor:
     component:
       componentReferences: []
-      name: kyma.project.io/module/template
+      name: kyma-project.io/template-operator
       provider: internal
       repositoryContexts:
-      - baseUrl: op-kcp-registry.localhost:8888/unsigned
+      - baseUrl: docker.io/tsmsap/module
         componentNameMapping: urlPath
         type: ociRegistry
       resources:
       - access:
-          digest: sha256:e5df58bb4c6d1e269af5fb27f170e09c4523eab581f2fdfd6a72b5932e147aa3
+          digest: sha256:0d15c52ad74a0e55c763c4e7c55ab47a99334580215e35e12cc3d871b80a6bb6
           type: localOciBlob
         name: template-operator
         relation: local
         type: helm-chart
-        version: 0.0.4
+        version: 0.0.5
       - access:
-          digest: sha256:db86408caca4c94250d8291aa79655b84146f9cc45e0da49f05a52b3722d74a0
+          digest: sha256:ce31e3ec61947f2424fd71bd1458e3c28c800e3bbc8ea959e04e3e9439de466e
           type: localOciBlob
         name: config
         relation: local
         type: yaml
-        version: 0.0.4
-      sources: []
-      version: 0.0.4
+        version: 0.0.5
+      sources:
+      - access:
+          commit: 28692263a4b76c5a20d76c280768d19a52069aa2
+          ref: refs/heads/main
+          repoUrl: github.com/kyma-project/template-operator
+          type: github
+        name: template-operator
+        type: git
+        version: 0.0.5
+      version: 0.0.5
     meta:
       schemaVersion: v2

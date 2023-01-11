@@ -1,29 +1,37 @@
 component:
   componentReferences: []
-  name: kyma-project.io/module/sample
+  name: kyma-project.io/template-operator
   provider: internal
   repositoryContexts:
-  - baseUrl: op-kcp-registry.localhost:5000/unsigned
+  - baseUrl: registry-1.docker.io/tsmsap/module
     componentNameMapping: urlPath
     type: ociRegistry
   resources:
   - access:
-      filename: sha256:2dd783cc8dab86a84a7f3be1a05859d7bb265e94ec3fd72558fa0d4fbd1ce375
+      filename: sha256:0d15c52ad74a0e55c763c4e7c55ab47a99334580215e35e12cc3d871b80a6bb6
       mediaType: application/gzip
       type: localFilesystemBlob
-    name: sample-operator
+    name: template-operator
     relation: local
     type: helm-chart
-    version: 0.0.1
+    version: 0.0.5
   - access:
-      filename: sha256:db86408caca4c94250d8291aa79655b84146f9cc45e0da49f05a52b3722d74a0
+      filename: sha256:ce31e3ec61947f2424fd71bd1458e3c28c800e3bbc8ea959e04e3e9439de466e
       mediaType: application/octet-stream
       type: localFilesystemBlob
     name: config
     relation: local
     type: yaml
-    version: 0.0.1
-  sources: []
-  version: 0.0.1
+    version: 0.0.5
+  sources:
+  - access:
+      commit: 28692263a4b76c5a20d76c280768d19a52069aa2
+      ref: refs/heads/main
+      repoUrl: github.com/kyma-project/template-operator
+      type: github
+    name: template-operator
+    type: git
+    version: 0.0.5
+  version: 0.0.5
 meta:
   schemaVersion: v2

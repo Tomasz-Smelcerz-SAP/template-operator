@@ -15,7 +15,7 @@ then
 fi
 
 # TODO this needs to be reverted to 'kyma-project' repository after testing!
-REPOSITORY=${REPOSITORY:-lindnerby/template-operator}
+REPOSITORY=${REPOSITORY:-Tomasz-Smelcerz-SAP/template-operator}
 GITHUB_URL=https://api.github.com/repos/${REPOSITORY}
 GITHUB_AUTH_HEADER="Authorization: token ${GITHUB_TOKEN}"
 CHANGELOG_FILE="CHANGELOG.md"

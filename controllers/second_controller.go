@@ -116,7 +116,9 @@ func (r *SecondReconciler) HandleInitialState(ctx context.Context, objectInstanc
 	partialStatus := (&v1alpha1.SampleStatus{}).
 		WithDivisibleByThreeConditionStatus(metav1.ConditionUnknown, objectInstance.GetGeneration())
 
-	return r.setStatusForObjectInstance(ctx, client.ObjectKeyFromObject(objectInstance), partialStatus)
+	forceOwnership := isForceOwnership(objectInstance.GetObjectMeta().GetAnnotations())
+
+	return r.setStatusForObjectInstance(ctx, client.ObjectKeyFromObject(objectInstance), partialStatus, false, forceOwnership)
 }
 
 func (r *SecondReconciler) HandleAnyOtherState(ctx context.Context, objectInstance *v1alpha1.Sample) error {
@@ -139,21 +141,50 @@ func (r *SecondReconciler) HandleAnyOtherState(ctx context.Context, objectInstan
 	//       Setting the state here leads to field ownership conflicts with the main controller.
 	partialStatus := (&v1alpha1.SampleStatus{}).WithDivisibleByThreeConditionStatus(divisibleByThreeCondition, objectInstance.GetGeneration())
 
+	propagateState, mode := isPropagateState(objectInstance.GetObjectMeta().GetAnnotations())
+
+	if propagateState {
+		if mode == "keep" {
+			partialStatus.State = objectInstance.Status.State
+		} else if mode == "empty" {
+			partialStatus.State = ""
+		}
+	}
+
+	forceValue := isForceOwnership(objectInstance.GetObjectMeta().GetAnnotations())
+
 	// set eventual state to Ready - if no errors were found
-	return r.setStatusForObjectInstance(ctx, client.ObjectKeyFromObject(objectInstance), partialStatus)
+	return r.setStatusForObjectInstance(ctx, client.ObjectKeyFromObject(objectInstance), partialStatus, propagateState, forceValue)
+}
+
+func isForceOwnership(annotations map[string]string) bool {
+	forceValueStr, ok := annotations["secondController.forceOwnership"]
+	if ok && forceValueStr == "false" {
+		fmt.Println("ForceValue is false") //nolint: forbidigo // this is a debug message
+		return false
+	}
+	return true
+}
+
+func isPropagateState(annotations map[string]string) (propagateState bool, mode string) { //nolint: nonamedreturns // this makes code shorter
+	mode, propagateState = annotations["secondController.propagateState"]
+	if propagateState {
+		fmt.Printf("debug.propagateState is %s\n", mode) //nolint: forbidigo // this is a debug message
+	}
+	return
 }
 
 func (r *SecondReconciler) setStatusForObjectInstance(ctx context.Context, targetObjectKey client.ObjectKey,
-	partialStatus *v1alpha1.SampleStatus,
+	partialStatus *v1alpha1.SampleStatus, propagateState, forceOwnership bool,
 ) error {
-	if err := r.ssaStatus(ctx, targetObjectKey, partialStatus); err != nil {
+	if err := r.ssaStatus(ctx, targetObjectKey, partialStatus, propagateState, forceOwnership); err != nil {
 		return fmt.Errorf("error updating status %s to: %w", partialStatus.State, err)
 	}
 	return nil
 }
 
 // ssaStatus patches status using SSA on the passed object.
-func (r *SecondReconciler) ssaStatus(ctx context.Context, targetObjectKey client.ObjectKey, partialStatus *v1alpha1.SampleStatus) error {
+func (r *SecondReconciler) ssaStatus(ctx context.Context, targetObjectKey client.ObjectKey, partialStatus *v1alpha1.SampleStatus, propagateState, forceOwnership bool) error {
 	dynClient, err := dynamic.NewForConfig(r.Config)
 	if err != nil {
 		return fmt.Errorf("error creating dynamic client: %w", err)
@@ -161,21 +192,20 @@ func (r *SecondReconciler) ssaStatus(ctx context.Context, targetObjectKey client
 
 	// Note: Gvr is NOT Gvk! (GroupVersionResource vs GroupVersionKind)
 	sampleGvr := schema.GroupVersionResource{Group: "operator.kyma-project.io", Version: "v1alpha1", Resource: "samples"}
-	unstructuredPatch := toUnstructured(targetObjectKey.Name, targetObjectKey.Namespace, partialStatus)
+	unstructuredPatch := toUnstructured(targetObjectKey.Name, targetObjectKey.Namespace, partialStatus, propagateState)
 
-	/*
-		json, err := unstructuredSample.MarshalJSON()
-		if err != nil {
-			return err
-		}
-		fmt.Println("========================================")
-		fmt.Println(string(json))
-		fmt.Println("========================================")
-	*/
+	json, err := unstructuredPatch.MarshalJSON()
+	if err != nil {
+		return err //nolint: wrapcheck // temporary debug code
+	}
+
+	fmt.Println("========================================") //nolint: forbidigo // this is a debug message
+	fmt.Println(string(json))                               //nolint: forbidigo // this is a debug message
+	fmt.Println("========================================") //nolint: forbidigo // this is a debug message
 
 	_, err = dynClient.Resource(sampleGvr).
 		Namespace(targetObjectKey.Namespace).
-		ApplyStatus(ctx, targetObjectKey.Name, unstructuredPatch, metav1.ApplyOptions{FieldManager: "sample.kyma-project.io/secondowner", Force: true})
+		ApplyStatus(ctx, targetObjectKey.Name, unstructuredPatch, metav1.ApplyOptions{FieldManager: "sample.kyma-project.io/secondowner", Force: forceOwnership})
 	if err != nil {
 		return fmt.Errorf("error patching status: %w", err)
 	}
@@ -183,16 +213,20 @@ func (r *SecondReconciler) ssaStatus(ctx context.Context, targetObjectKey client
 	return nil
 }
 
-func toUnstructured(name, namespace string, status *v1alpha1.SampleStatus) *unstructured.Unstructured {
+func toUnstructured(name, namespace string, status *v1alpha1.SampleStatus, propagateState bool) *unstructured.Unstructured {
+	statusMap := map[string]interface{}{
+		"conditions": conditionListToUnstructured(status.Conditions),
+	}
+	if propagateState {
+		statusMap["state"] = status.State
+	}
+
 	res := &unstructured.Unstructured{
 		Object: map[string]interface{}{
 			"apiVersion": "operator.kyma-project.io/v1alpha1",
 			"kind":       "Sample",
 			"metadata":   map[string]interface{}{"name": name, "namespace": namespace},
-			"status": map[string]interface{}{
-				// "state":      status.State, <- do not set state here, it is set by the main controller
-				"conditions": conditionListToUnstructured(status.Conditions),
-			},
+			"status":     statusMap,
 		},
 	}
 	return res
